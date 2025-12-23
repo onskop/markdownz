@@ -1,3 +1,123 @@
+Solution up here. Discussion and proposals below.
+
+If a user installs on Tuesday, their trial ends Friday. The standard report is Sunday.
+**Result:** They use the app for 3 days, see **zero** value/feedback, hit a paywall on Friday, and delete the app immediately.
+
+You **must** show the report for free if they cancel/expire. This is the **"Free Exit Interview"** strategy.
+
+It works because of the **Reciprocity Principle**: "We analyzed your data (gave value) even though you left. Look how useful this is. Don't you want this every week?"
+
+Here is the exact UX and Logic flow to handle this, minimizing overlap for paying users while capturing cancelling users.
+
+---
+
+### The Strategy: "Report on Exit"
+The Graduation Report is **NOT** generated for happy, paying users. It is **ONLY** generated for users who have hit the paywall (Cancelled or Card Failed).
+
+#### 1. The 3-Day Trial User (Tue Install -> Fri Expiry)
+*   **Tue-Thu:** Logs meals. No report generated yet.
+*   **Fri Morning:** User opens app. Trial is expired.
+*   **The Experience:**
+    1.  **Blocker:** App shows a screen (modified `Paywall01Widget`).
+    2.  **Headline:** "Your 3-Day Analysis is Ready."
+    3.  **Subtext:** "You've logged meals for 3 days. Before you go, see what our AI discovered about your habits."
+    4.  **Button:** "View Free Report" (Not "Subscribe" yet).
+    5.  **Action:** User clicks -> Report loads (generated on fly).
+    6.  **The Report:** Shows the analysis.
+    7.  **The Hook:** At the very bottom of the report (and a sticky button): **"Continue your journey. Subscribe for $X."**
+
+#### 2. The 7-Day Trial User (Thu Install -> Wed Expiry)
+*   **Thu-Sat:** Logs meals.
+*   **Sunday:** **Standard Weekly Report** (Free). User sees value.
+*   **Mon-Wed:** Logs meals.
+*   **Wed Morning:** User opens app. Trial is expired.
+*   **The Experience:**
+    1.  **Blocker:** App shows `Paywall01Widget`.
+    2.  **Headline:** "Your Trial has ended."
+    3.  **Subtext:** "We've prepared a summary of your full trial week."
+    4.  **Button:** "View Free Report."
+    5.  **Report:** Analysis of the full 7 days.
+    6.  **The Hook:** "Unlock next Sunday's report."
+
+---
+
+### Technical Implementation (MVP Style)
+
+We need to modify the flow so that when a user is "Expired," we check if they have seen their "Exit Report" yet.
+
+#### Step 1: Add a Flag
+In `UsersRecord` (Firestore), add a boolean field:
+*   `hasSeenGraduationReport` (default: `false`)
+
+#### Step 2: The Paywall Logic (`Paywall01Widget`)
+Modify the `Paywall01Widget` to have two "States" (you can use a PageView or conditional visibility).
+
+**State A: The Lure (If `hasSeenGraduationReport == false`)**
+*   **UI:** "Your Trial Analysis is Waiting."
+*   **Button:** "Generate & View Report".
+*   **Action:**
+    1.  Call `actCoachMealString` (Range: `created_time` to `now`).
+    2.  Call `CallCoachCall`.
+    3.  **Save** the result to `CoachRecords` (mark it as "graduation" type if you want, or just date it today).
+    4.  Update User: Set `hasSeenGraduationReport = true`.
+    5.  Navigate to a "Report View" page (re-use your Reporting page, just passing the specific text/JSON you just generated).
+
+**State B: The Hard Paywall (If `hasSeenGraduationReport == true`)**
+*   **UI:** "Hope you enjoyed your report. To keep your Coach, please subscribe."
+*   **Button:** "Subscribe".
+*   **Back Button:** Returns to State A (The Lure) or re-opens the report they just generated (so they don't feel cheated that it disappeared).
+
+#### Step 3: Happy Path (Auto-Renew)
+If the user subscribes *during* the trial or auto-renews:
+1.  They never hit the Paywall.
+2.  They never trigger State A.
+3.  They never see the Graduation Report.
+4.  **Problem Solved:** No overlap for paying users. They just get the standard Sunday report.
+
+---
+
+### Why this is the best MVP approach:
+
+1.  **Solves the 3-Day Void:** The user gets value exactly when they are about to churn.
+2.  **Solves the Overlap:** Paying users never see the "weird" mid-week report. It keeps their experience clean (Sunday to Sunday).
+3.  **Zero "Hidden" Screens:** You are just reusing the Paywall and the existing Report View.
+4.  **Low API Waste:** You only generate the report if the user actually opens the app and clicks "View Report" after their trial expires. You don't auto-generate it for users who uninstalled 2 days ago.
+
+### Detailed Flow for 3-Day User (Tuesday Install)
+
+1.  **Tuesday:** Install.
+2.  **Wednesday:** Log meals.
+3.  **Thursday:** Log meals.
+4.  **Friday (Trial Expired):**
+    *   User opens app.
+    *   `main.dart` checks entitlement. Subscription invalid.
+    *   Redirect to `Paywall01Widget`.
+    *   `Paywall01Widget` checks `currentUser.hasSeenGraduationReport` (it is false).
+    *   **UI Shows:** "Wait! Your 3-Day analysis is ready."
+    *   User clicks "Show me".
+    *   **App:** Calls AI -> Generates Report -> Updates `hasSeenGraduationReport = true` -> Shows Report.
+    *   User reads: "You ate well, but your protein is low."
+    *   User thinks: "Cool, I want to fix that."
+    *   User clicks "Subscribe" at bottom of report.
+    *   **Result:** Conversion.
+
+### Detailed Flow for 7-Day User (Thursday Install) - Subscribed
+
+1.  **Thursday:** Install.
+2.  **Sunday:** **Standard Report** generated automatically. User gets notification. Views report.
+3.  **Wednesday (Trial Ends):** Credit card charged successfully.
+4.  **Thursday:** User opens app.
+    *   `main.dart` checks entitlement. Subscription **Valid**.
+    *   User goes to Home Screen.
+    *   **Result:** No interruption, no overlapping "Graduation Report." Just smooth sailing to next Sunday.
+
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
 This is a classic "Product Lifecycle vs. User Lifecycle" conflict. You have a **System Cycle** (Weekly reports on Mon/Sat) and a **User Cycle** (Trial ends exactly 3 or 7 days after signup).
 
 Since you are using FlutterFlow and Cloud Functions (Buildship) with flexible date inputs for your AI, you have the technical agility to solve this creatively.
