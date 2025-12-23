@@ -1,3 +1,11 @@
+This is a classic "Product Lifecycle vs. User Lifecycle" conflict. You have a **System Cycle** (Weekly reports on Mon/Sat) and a **User Cycle** (Trial ends exactly 3 or 7 days after signup).
+
+Since you are using FlutterFlow and Cloud Functions (Buildship) with flexible date inputs for your AI, you have the technical agility to solve this creatively.
+
+Here are four strategies to solve the "Triple Report Overlap" problem, ranked from most conversion-focused to most UX-consistent.
+
+---
+
 ### Solution 1: The "Graduation" Report (Recommended)
 **Concept:** Treat the Trial End report differently than a Weekly Report.
 Instead of giving them a standard "How you ate this week" report when the trial ends, give them a **"Future Projection"** report.
